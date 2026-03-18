@@ -30,16 +30,32 @@ export type UiSettings = {
   offsetY: number;
 };
 
+export type TokenUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
+export type ModeUsageStats = {
+  calls: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  lastUsage?: TokenUsage;
+  lastCalledAt?: number;
+};
+
 export type StoredData = {
   version: number;
   config?: ApiConfig;
   modes?: OptimizeMode[];
   remoteModels?: RemoteModel[];
   ui?: UiSettings;
+  modeStats?: Record<string, ModeUsageStats>;
 };
 
 const STORAGE_KEY = "inputImproveData";
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 export function defaultUiSettings(): UiSettings {
   return {
@@ -50,26 +66,18 @@ export function defaultUiSettings(): UiSettings {
   };
 }
 
-export async function loadStoredData(): Promise<StoredData> {
+async function loadStoredDataFromArea(area: "sync" | "local"): Promise<StoredData | undefined> {
   return new Promise((resolve) => {
-    chrome.storage.sync.get([STORAGE_KEY], (result) => {
+    chrome.storage[area].get([STORAGE_KEY], (result) => {
       const data = (result[STORAGE_KEY] || {}) as StoredData;
-      if (!data.version) {
-        resolve({
-          version: CURRENT_VERSION,
-          config: undefined,
-          modes: [],
-          remoteModels: [],
-          ui: defaultUiSettings(),
-        });
-        return;
-      }
+      if (!data.version) return resolve(undefined);
       resolve({
         version: data.version,
         config: data.config,
         modes: data.modes ?? [],
         remoteModels: data.remoteModels ?? [],
         ui: data.ui ?? defaultUiSettings(),
+        modeStats: data.modeStats ?? {},
       });
     });
   });
@@ -82,10 +90,34 @@ export async function saveStoredData(data: StoredData): Promise<void> {
     modes: data.modes ?? [],
     remoteModels: data.remoteModels ?? [],
     ui: data.ui ?? defaultUiSettings(),
+    modeStats: data.modeStats ?? {},
   };
   return new Promise((resolve) => {
-    chrome.storage.sync.set({ [STORAGE_KEY]: toSave }, () => resolve());
+    chrome.storage.local.set({ [STORAGE_KEY]: toSave }, () => resolve());
   });
+}
+
+export async function loadStoredData(): Promise<StoredData> {
+  // Prefer `local` for stats to avoid `chrome.storage.sync` item quota overflow.
+  const local = await loadStoredDataFromArea("local");
+  if (local) return local;
+
+  // Fallback for existing users (before this change).
+  const sync = await loadStoredDataFromArea("sync");
+  if (sync) {
+    // Best-effort migration; ignore quota errors because we just fixed the target.
+    void saveStoredData(sync).catch(() => {});
+    return sync;
+  }
+
+  return {
+    version: CURRENT_VERSION,
+    config: undefined,
+    modes: [],
+    remoteModels: [],
+    ui: defaultUiSettings(),
+    modeStats: {},
+  };
 }
 
 export async function updateStoredData(

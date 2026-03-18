@@ -97,7 +97,33 @@ chrome.runtime.onMessage.addListener((message: Msg, _sender, sendResponse: (res:
           userText: message.inputText,
           maxTokens: 800,
         });
-        sendResponse({ ok: true, data: { text: result.text } });
+        const modeId = message.modeId;
+        const usage = result.usage;
+
+        // Persist token usage stats per optimize mode.
+        await updateStoredData((cur) => {
+          const next = { ...(cur.modeStats ?? {}) };
+          const curStat = next[modeId] ?? {
+            calls: 0,
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            totalTokens: 0,
+          };
+
+          curStat.calls += 1;
+          curStat.totalPromptTokens += typeof usage?.promptTokens === "number" ? usage.promptTokens : 0;
+          curStat.totalCompletionTokens += typeof usage?.completionTokens === "number" ? usage.completionTokens : 0;
+          curStat.totalTokens += typeof usage?.totalTokens === "number" ? usage.totalTokens : 0;
+          curStat.lastUsage = usage;
+          curStat.lastCalledAt = Date.now();
+
+          next[modeId] = curStat;
+          return { ...cur, modeStats: next };
+        });
+
+        console.debug("[input-improve] saved modeStats", { modeId, usage });
+
+        sendResponse({ ok: true, data: { text: result.text, usage } });
         return;
       }
 

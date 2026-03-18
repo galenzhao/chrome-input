@@ -1,6 +1,6 @@
 import { defaultUiSettings, loadStoredData, saveStoredData } from "../shared/storage";
 import { toOriginPattern } from "../shared/openai";
-import type { ApiConfig, OptimizeMode, UiSettings } from "../shared/storage";
+import type { ApiConfig, ModeUsageStats, OptimizeMode, UiSettings } from "../shared/storage";
 
 type BgRes = { ok: true; data?: any } | { ok: false; error: string };
 
@@ -89,7 +89,7 @@ function clearModeForm() {
   editingModeId = null;
 }
 
-function renderModesList(modes: OptimizeMode[]) {
+function renderModesList(modes: OptimizeMode[], modeStats: Record<string, ModeUsageStats> = {}) {
   const root = document.getElementById("modesList")!;
   root.innerHTML = "";
   if (!modes.length) {
@@ -110,7 +110,15 @@ function renderModesList(modes: OptimizeMode[]) {
     title.textContent = m.name;
     const meta = document.createElement("div");
     meta.className = "listItemMeta";
-    meta.textContent = `model: ${m.model}`;
+    const s = modeStats[m.id];
+    const calls = s?.calls ?? 0;
+    const totalTokens = s?.totalTokens;
+    const lastTotal = s?.lastUsage?.totalTokens;
+    meta.textContent = [
+      `model: ${m.model}`,
+      `调用: ${calls}；总 token: ${typeof totalTokens === "number" ? totalTokens : 0}`,
+      `最近一次: ${typeof lastTotal === "number" ? lastTotal : "-"}`,
+    ].join("\n");
     left.appendChild(title);
     left.appendChild(meta);
 
@@ -136,8 +144,10 @@ function renderModesList(modes: OptimizeMode[]) {
     delBtn.onclick = async () => {
       const next = modes.filter((x) => x.id !== m.id);
       const stored = await loadStoredData();
-      await saveStoredData({ ...stored, modes: next });
-      renderModesList(next);
+      const nextModeStats = { ...(stored.modeStats ?? {}) };
+      delete nextModeStats[m.id];
+      await saveStoredData({ ...stored, modes: next, modeStats: nextModeStats });
+      renderModesList(next, nextModeStats);
       setStatus(`已删除：${m.name}`);
       if (editingModeId === m.id) clearModeForm();
     };
@@ -165,7 +175,7 @@ async function refreshFromStorage() {
 
   cachedModels = (stored.remoteModels || []).map((m) => m.id).filter(Boolean);
   renderModelSelect(cachedModels, config?.defaultModel);
-  renderModesList(stored.modes || []);
+  renderModesList(stored.modes || [], stored.modeStats ?? {});
 }
 
 async function refreshRemoteModels() {
@@ -260,7 +270,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     await saveStoredData({ ...stored, modes });
-    renderModesList(modes);
+    renderModesList(modes, stored.modeStats ?? {});
     setStatus(editingModeId ? "已更新优化方式" : "已新增优化方式");
     clearModeForm();
   };
@@ -286,5 +296,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   uiOffsetYEl.addEventListener("change", autoSaveHandler);
   uiOffsetXEl.addEventListener("blur", autoSaveHandler);
   uiOffsetYEl.addEventListener("blur", autoSaveHandler);
+
+  // Keep token stats in sync with background updates while this page is open.
+  chrome.storage.onChanged.addListener((_changes, areaName) => {
+    if (areaName !== "local") return;
+    void refreshFromStorage();
+  });
 });
 

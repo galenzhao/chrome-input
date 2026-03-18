@@ -1,8 +1,15 @@
 import type { ApiConfig } from "./storage";
 
+export type TokenUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
 export type ChatCompletionResult = {
   text: string;
   raw: unknown;
+  usage?: TokenUsage;
 };
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -76,6 +83,15 @@ export async function chatComplete(config: ApiConfig, args: { model: string; sys
 
   const text = String(json?.choices?.[0]?.message?.content ?? "").trim();
   if (!text) throw new Error("接口返回为空（choices[0].message.content 为空）");
-  return { text, raw: json };
+  const usageJson = json?.usage;
+  const usage: TokenUsage | undefined = usageJson
+    ? {
+        promptTokens: typeof usageJson?.prompt_tokens === "number" ? usageJson.prompt_tokens : undefined,
+        completionTokens: typeof usageJson?.completion_tokens === "number" ? usageJson.completion_tokens : undefined,
+        totalTokens: typeof usageJson?.total_tokens === "number" ? usageJson.total_tokens : undefined,
+      }
+    : undefined;
+
+  return { text, raw: json, usage };
 }
 

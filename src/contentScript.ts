@@ -1,5 +1,20 @@
 type BgRes = { ok: true; data?: any } | { ok: false; error: string };
 
+type TokenUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
+type ModeUsageStats = {
+  calls: number;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  lastUsage?: TokenUsage;
+  lastCalledAt?: number;
+};
+
 async function bg(message: any): Promise<BgRes> {
   try {
     return await chrome.runtime.sendMessage(message);
@@ -35,6 +50,23 @@ function setTextToTarget(target: HTMLElement, text: string) {
   }
   target.textContent = text;
   target.dispatchEvent(new InputEvent("input", { bubbles: true }));
+}
+
+function formatModeUsageStats(stats?: ModeUsageStats): string {
+  const calls = stats?.calls ?? 0;
+  const totalTokens = stats?.totalTokens;
+  const lastTotal = stats?.lastUsage?.totalTokens;
+  const lastPrompt = stats?.lastUsage?.promptTokens;
+  const lastCompletion = stats?.lastUsage?.completionTokens;
+
+  const lines: string[] = [];
+  lines.push(`调用: ${calls}，总 token: ${typeof totalTokens === "number" ? totalTokens : 0}`);
+  if (typeof lastTotal === "number") {
+    lines.push(`最近一次: ${lastTotal}（提示 ${typeof lastPrompt === "number" ? lastPrompt : "-"} / 输出 ${typeof lastCompletion === "number" ? lastCompletion : "-" }）`);
+  } else {
+    lines.push(`最近一次: -`);
+  }
+  return lines.join("\n");
 }
 
 function createUi() {
@@ -80,6 +112,9 @@ function createUi() {
     }
     .panel[data-hidden="1"] { display: none; }
     .item {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
       padding: 10px 10px;
       border-radius: 10px;
       cursor: pointer;
@@ -88,6 +123,7 @@ function createUi() {
     }
     .item:hover { background: rgba(0,0,0,0.06); }
     .itemDisabled { opacity: 0.55; cursor: default; }
+    .itemStat { font-size: 11px; color: #666; white-space: pre-wrap; }
     .hint { padding: 8px 10px; font-size: 12px; color: #666; }
     .err { padding: 8px 10px; font-size: 12px; color: #b00020; white-space: pre-wrap; }
   `;
@@ -197,6 +233,7 @@ async function openPanel() {
   }
 
   const modes = (res.data?.modes || []) as Array<{ id: string; name: string }>;
+  let modeStats = (res.data?.modeStats || {}) as Record<string, ModeUsageStats>;
   ui.panel.innerHTML = "";
   if (!modes.length) {
     const hint = document.createElement("div");
@@ -209,20 +246,57 @@ async function openPanel() {
   for (const m of modes) {
     const item = document.createElement("div");
     item.className = "item";
-    item.textContent = m.name;
+    const title = document.createElement("div");
+    title.textContent = m.name;
+    const stat = document.createElement("div");
+    stat.className = "itemStat";
+    stat.textContent = formatModeUsageStats(modeStats[m.id]);
+    item.appendChild(title);
+    item.appendChild(stat);
     item.onclick = async () => {
       console.log("[input-improve] mode click", { modeId: m.id, modeName: m.name });
       if (!currentTarget || isRunning) return;
       isRunning = true;
       item.classList.add("itemDisabled");
-      item.textContent = "处理中…";
+      title.textContent = "处理中…";
+      stat.textContent = "正在统计 token 使用量…";
       try {
         const inputText = getTextFromTarget(currentTarget);
         const run = await bg({ type: "runMode", modeId: m.id, inputText });
         if (!run.ok) throw new Error(run.error);
         setTextToTarget(currentTarget, String(run.data.text || ""));
         console.log("[input-improve] runMode success");
-        hidePanel();
+
+        // Update local (in-panel) token stats immediately.
+        const usage = run.data?.usage as TokenUsage | undefined;
+        const prev = modeStats[m.id];
+        const next: ModeUsageStats = {
+          calls: (prev?.calls ?? 0) + 1,
+          totalPromptTokens: (prev?.totalPromptTokens ?? 0) + (typeof usage?.promptTokens === "number" ? usage.promptTokens : 0),
+          totalCompletionTokens:
+            (prev?.totalCompletionTokens ?? 0) + (typeof usage?.completionTokens === "number" ? usage.completionTokens : 0),
+          totalTokens: (prev?.totalTokens ?? 0) + (typeof usage?.totalTokens === "number" ? usage.totalTokens : 0),
+          lastUsage: usage,
+          lastCalledAt: Date.now(),
+        };
+        modeStats[m.id] = next;
+        title.textContent = m.name;
+        stat.textContent = formatModeUsageStats(next);
+
+        // Try refreshing stats from storage right after.
+        // Some browsers may delay `sync` updates across extension contexts.
+        try {
+          const state2 = await bg({ type: "getState" });
+          if (state2.ok && state2.data?.modeStats) {
+            modeStats = state2.data.modeStats as Record<string, ModeUsageStats>;
+            stat.textContent = formatModeUsageStats(modeStats[m.id]);
+          }
+        } catch {
+          // ignore
+        }
+
+        // Give the user a moment to see the token stats.
+        setTimeout(() => hidePanel(), 1200);
       } catch (e: any) {
         console.log("[input-improve] runMode error", e);
         ui.panel.innerHTML = "";
@@ -300,7 +374,7 @@ async function loadUiSettings() {
 
 loadUiSettings();
 chrome.storage.onChanged.addListener((_changes, areaName) => {
-  if (areaName !== "sync") return;
+  if (areaName !== "local") return;
   loadUiSettings();
 });
 
