@@ -95,7 +95,7 @@ chrome.runtime.onMessage.addListener((message: Msg, _sender, sendResponse: (res:
           model: mode.model,
           systemPrompt: mode.prompt,
           userText: message.inputText,
-          maxTokens: 800,
+          maxTokens: mode.maxTokens,
         });
         const modeId = message.modeId;
         const usage = result.usage;

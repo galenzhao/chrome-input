@@ -81,6 +81,10 @@
           <label>Prompt（system）</label>
           <textarea id="modePrompt" rows="6" placeholder="例如：把用户输入优化成更清晰、更专业的中文。仅返回优化后的文本。"></textarea>
         </div>
+        <div class="row">
+          <label>Max Tokens（可选）</label>
+          <input id="modeMaxTokens" type="number" min="1" placeholder="不填=使用模型默认上限" />
+        </div>
         <div class="actions">
           <button id="addMode">新增/更新</button>
           <button id="clearMode">清空表单</button>

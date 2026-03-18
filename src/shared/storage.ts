@@ -9,6 +9,11 @@ export type OptimizeMode = {
   name: string;
   model: string;
   prompt: string;
+  /**
+   * Optional generation cap for this mode.
+   * If omitted, we intentionally don't send `max_tokens` so the backend/model can use its own default maximum.
+   */
+  maxTokens?: number;
   updatedAt: number;
 };
 

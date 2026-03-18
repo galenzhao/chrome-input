@@ -84,6 +84,7 @@ let cachedModels: string[] = [];
 function clearModeForm() {
   (document.getElementById("modeName") as HTMLInputElement).value = "";
   (document.getElementById("modePrompt") as HTMLTextAreaElement).value = "";
+  (document.getElementById("modeMaxTokens") as HTMLInputElement).value = "";
   (document.getElementById("modeModelSelect") as HTMLSelectElement).value = "";
   (document.getElementById("modeModelManual") as HTMLInputElement).value = "";
   editingModeId = null;
@@ -116,6 +117,7 @@ function renderModesList(modes: OptimizeMode[], modeStats: Record<string, ModeUs
     const lastTotal = s?.lastUsage?.totalTokens;
     meta.textContent = [
       `model: ${m.model}`,
+      `maxTokens: ${typeof m.maxTokens === "number" ? m.maxTokens : "默认(模型上限)"}`,
       `调用: ${calls}；总 token: ${typeof totalTokens === "number" ? totalTokens : 0}`,
       `最近一次: ${typeof lastTotal === "number" ? lastTotal : "-"}`,
     ].join("\n");
@@ -130,6 +132,7 @@ function renderModesList(modes: OptimizeMode[], modeStats: Record<string, ModeUs
       editingModeId = m.id;
       (document.getElementById("modeName") as HTMLInputElement).value = m.name;
       (document.getElementById("modePrompt") as HTMLTextAreaElement).value = m.prompt;
+      (document.getElementById("modeMaxTokens") as HTMLInputElement).value = typeof m.maxTokens === "number" ? String(m.maxTokens) : "";
       if (cachedModels.includes(m.model)) {
         (document.getElementById("modeModelSelect") as HTMLSelectElement).value = m.model;
         (document.getElementById("modeModelManual") as HTMLInputElement).value = "";
@@ -251,22 +254,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const stored = await loadStoredData();
     const name = (document.getElementById("modeName") as HTMLInputElement).value.trim();
     const prompt = (document.getElementById("modePrompt") as HTMLTextAreaElement).value.trim();
+    const maxTokensRaw = (document.getElementById("modeMaxTokens") as HTMLInputElement).value.trim();
     const model = getSelectedModel(cachedModels).trim();
     if (!name) return setStatus("请填写名称", true);
     if (!model) return setStatus("请先刷新模型列表或手动输入模型名", true);
     if (!prompt) return setStatus("请填写 prompt", true);
+
+    const maxTokensNum = maxTokensRaw ? Number(maxTokensRaw) : undefined;
+    if (maxTokensRaw && (!Number.isFinite(maxTokensNum) || maxTokensNum! < 1)) {
+      return setStatus("Max Tokens 需要是大于等于 1 的数字（留空表示使用模型默认上限）", true);
+    }
+    const maybeMaxTokens = typeof maxTokensNum === "number" ? { maxTokens: Math.floor(maxTokensNum) } : {};
 
     const now = Date.now();
     const modes = (stored.modes || []).slice();
     if (editingModeId) {
       const idx = modes.findIndex((m) => m.id === editingModeId);
       if (idx >= 0) {
-        modes[idx] = { ...modes[idx], name, model, prompt, updatedAt: now };
+        modes[idx] = { ...modes[idx], name, model, prompt, updatedAt: now, ...maybeMaxTokens };
       } else {
-        modes.unshift({ id: uuid(), name, model, prompt, updatedAt: now });
+        modes.unshift({ id: uuid(), name, model, prompt, updatedAt: now, ...maybeMaxTokens });
       }
     } else {
-      modes.unshift({ id: uuid(), name, model, prompt, updatedAt: now });
+      modes.unshift({ id: uuid(), name, model, prompt, updatedAt: now, ...maybeMaxTokens });
     }
 
     await saveStoredData({ ...stored, modes });

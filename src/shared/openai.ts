@@ -49,15 +49,19 @@ export async function fetchModels(config: ApiConfig): Promise<{ models: string[]
 export async function chatComplete(config: ApiConfig, args: { model: string; systemPrompt?: string; userText: string; maxTokens?: number }): Promise<ChatCompletionResult> {
   const baseUrl = normalizeBaseUrl(config.baseUrl);
   const url = `${baseUrl}/v1/chat/completions`;
-  const body = {
+  const body: any = {
     model: args.model,
     messages: [
       ...(args.systemPrompt ? [{ role: "system", content: args.systemPrompt }] : []),
       { role: "user", content: args.userText },
     ],
     temperature: 0.2,
-    max_tokens: args.maxTokens ?? 512,
   };
+  // If `maxTokens` is not configured for this mode, we intentionally omit `max_tokens`
+  // so the backend/model can apply its own default maximum.
+  if (typeof args.maxTokens === "number") {
+    body.max_tokens = args.maxTokens;
+  }
 
   const res = await fetch(url, {
     method: "POST",
