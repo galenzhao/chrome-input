@@ -1,0 +1,129 @@
+.container {
+  max-width: 920px;
+  margin: 24px auto;
+  padding: 0 16px;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  color: #111;
+}
+
+h2 {
+  margin: 18px 0 10px;
+  font-size: 18px;
+}
+
+h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.card {
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+  margin-bottom: 14px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.row label {
+  width: 140px;
+  color: #333;
+  font-size: 13px;
+}
+
+.row input,
+.row textarea,
+.row select {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  font-size: 13px;
+}
+
+.modelRow {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+button {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #f7f7f7;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f0f0f0;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+.rowBetween {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.small {
+  font-size: 12px;
+  color: #666;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+}
+
+.listItemTitle {
+  font-weight: 600;
+}
+
+.listItemMeta {
+  font-size: 12px;
+  color: #666;
+}
+
+.listItemActions {
+  display: flex;
+  gap: 8px;
+}
+

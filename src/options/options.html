@@ -1,0 +1,102 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Input Improve Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h2>配置</h2>
+      <div class="card">
+        <div class="row">
+          <label>Base URL</label>
+          <input id="baseUrl" placeholder="https://api.example.com" />
+        </div>
+        <div class="row">
+          <label>API Key</label>
+          <input id="apiKey" placeholder="sk-..." type="password" />
+        </div>
+        <div class="row">
+          <label>默认模型（可选）</label>
+          <input id="defaultModel" placeholder="例如：gpt-4.1-mini" />
+        </div>
+
+        <div class="actions">
+          <button id="saveConfig">保存</button>
+          <button id="requestPerm">授权当前域名</button>
+          <button id="refreshModels">刷新模型列表</button>
+          <button id="validate">验证接口</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        <div class="hint">
+          上架版本将按需请求域名权限：首次验证/刷新模型/实际调用时会弹窗，请允许访问你填写的 API 域名。
+        </div>
+      </div>
+
+      <h2>按钮位置</h2>
+      <div class="card">
+        <div class="row">
+          <label>显示方式</label>
+          <select id="uiPlacement">
+            <option value="followInput">跟随输入框（默认）</option>
+            <option value="fixed">固定在页面角落</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>固定角落</label>
+          <select id="uiCorner">
+            <option value="bottomRight">右下</option>
+            <option value="bottomLeft">左下</option>
+            <option value="topRight">右上</option>
+            <option value="topLeft">左上</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>偏移（px）</label>
+          <div class="modelRow">
+            <input id="uiOffsetX" type="number" placeholder="X" />
+            <input id="uiOffsetY" type="number" placeholder="Y" />
+          </div>
+        </div>
+        <div class="hint">提示：如果右下角被其他插件占用，把显示方式改成“固定在页面角落”，再换个角落即可。</div>
+      </div>
+
+      <h2>优化方式</h2>
+      <div class="card">
+        <div class="row">
+          <label>名称</label>
+          <input id="modeName" placeholder="例如：更礼貌 / 更简洁" />
+        </div>
+        <div class="row">
+          <label>模型</label>
+          <div class="modelRow">
+            <select id="modeModelSelect"></select>
+            <input id="modeModelManual" placeholder="获取失败时可手动输入模型" />
+          </div>
+        </div>
+        <div class="row">
+          <label>Prompt（system）</label>
+          <textarea id="modePrompt" rows="6" placeholder="例如：把用户输入优化成更清晰、更专业的中文。仅返回优化后的文本。"></textarea>
+        </div>
+        <div class="actions">
+          <button id="addMode">新增/更新</button>
+          <button id="clearMode">清空表单</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="rowBetween">
+          <h3>列表</h3>
+          <span class="small">点击编辑；删除后不可恢复</span>
+        </div>
+        <div id="modesList" class="list"></div>
+      </div>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>
+
