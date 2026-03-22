@@ -1,10 +1,10 @@
 {
   "name": "chrome-input-improve",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "description": "Chrome extension that adds a floating optimize button to text inputs and uses an OpenAI-compatible API to improve the text.",
   "scripts": {
-    "clean": "rm -rf dist release",
+    "clean": "shx rm -rf dist release",
     "dev": "npm run build:dev && npm run watch",
     "build:dev": "npm run clean && npm run build:background:dev && npm run build:content:dev && npm run build:options:dev && npm run build:static",
     "build:background:dev": "esbuild src/background.ts --bundle --platform=browser --outfile=dist/background.js --format=esm --sourcemap",
@@ -19,13 +19,15 @@
     "build:background:release": "esbuild src/background.ts --bundle --platform=browser --outfile=dist/background.js --format=esm --minify",
     "build:content:release": "esbuild src/contentScript.ts --bundle --platform=browser --outfile=dist/contentScript.js --format=esm --minify",
     "build:options:release": "esbuild src/options/options.ts --bundle --platform=browser --outfile=dist/options.js --format=esm --minify",
-    "build:static": "mkdir -p dist && cp src/options/options.html dist/options.html && cp src/options/options.css dist/options.css",
+    "build:static": "shx mkdir -p dist && shx cp src/options/options.html dist/options.html && shx cp src/options/options.css dist/options.css",
     "bump:version": "node scripts/bump-extension-version.mjs",
-    "pack": "npm run bump:version && npm run build:release && mkdir -p release && zip -r release/chrome-input-improve.zip manifest.json dist -x \"**/.DS_Store\""
+    "pack": "npm run bump:version && npm run build:release && shx mkdir -p release && bestzip release/chrome-input-improve.zip manifest.json icon128.png dist"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",
+    "bestzip": "^2.2.1",
     "esbuild": "^0.24.0",
+    "shx": "^0.3.4",
     "typescript": "^5.6.0"
   }
 }

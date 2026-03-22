@@ -24,10 +24,19 @@ async function bg(message: any): Promise<BgRes> {
   return chrome.runtime.sendMessage(message);
 }
 
+function getDefaultModelFromUI(): string {
+  const sel = document.getElementById("defaultModelSelect") as HTMLSelectElement;
+  const manual = (document.getElementById("defaultModelManual") as HTMLInputElement).value.trim();
+  const fromSel = sel.value?.trim();
+  if (fromSel) return fromSel;
+  if (manual) return manual;
+  return "";
+}
+
 function normalizeConfigFromUI(): ApiConfig {
   const baseUrl = (document.getElementById("baseUrl") as HTMLInputElement).value.trim();
   const apiKey = (document.getElementById("apiKey") as HTMLInputElement).value.trim();
-  const defaultModel = (document.getElementById("defaultModel") as HTMLInputElement).value.trim();
+  const defaultModel = getDefaultModelFromUI();
   return {
     baseUrl,
     apiKey,
@@ -76,6 +85,35 @@ function renderModelSelect(models: string[], prefer?: string) {
     sel.appendChild(opt);
   }
   if (prefer && models.includes(prefer)) sel.value = prefer;
+}
+
+function renderDefaultModelSelect(models: string[], saved?: string) {
+  const sel = document.getElementById("defaultModelSelect") as HTMLSelectElement;
+  const manualEl = document.getElementById("defaultModelManual") as HTMLInputElement;
+  sel.innerHTML = "";
+
+  const opt0 = document.createElement("option");
+  opt0.value = "";
+  opt0.textContent = models.length ? "（可选）" : "（无列表，请手动输入）";
+  sel.appendChild(opt0);
+
+  for (const m of models) {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    sel.appendChild(opt);
+  }
+
+  if (saved && models.includes(saved)) {
+    sel.value = saved;
+    manualEl.value = "";
+  } else if (saved) {
+    sel.value = "";
+    manualEl.value = saved;
+  } else {
+    sel.value = "";
+    manualEl.value = "";
+  }
 }
 
 let editingModeId: string | null = null;
@@ -168,7 +206,6 @@ async function refreshFromStorage() {
   const config = stored.config;
   (document.getElementById("baseUrl") as HTMLInputElement).value = config?.baseUrl || "";
   (document.getElementById("apiKey") as HTMLInputElement).value = config?.apiKey || "";
-  (document.getElementById("defaultModel") as HTMLInputElement).value = config?.defaultModel || "";
 
   const ui = stored.ui ?? defaultUiSettings();
   (document.getElementById("uiPlacement") as HTMLSelectElement).value = ui.placement;
@@ -178,6 +215,7 @@ async function refreshFromStorage() {
 
   cachedModels = (stored.remoteModels || []).map((m) => m.id).filter(Boolean);
   renderModelSelect(cachedModels, config?.defaultModel);
+  renderDefaultModelSelect(cachedModels, config?.defaultModel);
   renderModesList(stored.modes || [], stored.modeStats ?? {});
 }
 
@@ -185,8 +223,10 @@ async function refreshRemoteModels() {
   setStatus("正在获取模型列表…", false);
   const res = await bg({ type: "refreshRemoteModels" });
   if (!res.ok) {
+    const currentDefault = getDefaultModelFromUI();
     cachedModels = [];
     renderModelSelect(cachedModels);
+    renderDefaultModelSelect(cachedModels, currentDefault || undefined);
     setStatus(res.error + "\n\n已切换为手动输入模型名。", true);
     return;
   }
