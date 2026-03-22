@@ -1,3 +1,5 @@
+import { CM5_SET_VALUE_EVENT } from "./shared/cmBridge";
+
 type BgRes = { ok: true; data?: any } | { ok: false; error: string };
 
 type TokenUsage = {
@@ -37,12 +39,173 @@ function getEditableTarget(start: EventTarget | null): HTMLElement | null {
   return null;
 }
 
+/** CodeMirror 5 instance shape (no dependency on @types/codemirror). */
+type CodeMirror5Like = {
+  getValue: () => string;
+  setValue: (value: string) => void;
+  save?: () => void;
+};
+
+function asCodeMirror5Like(v: unknown): CodeMirror5Like | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as CodeMirror5Like;
+  if (typeof o.getValue !== "function" || typeof o.setValue !== "function") return null;
+  return o;
+}
+
+function findCodeMirror5From(el: HTMLElement): CodeMirror5Like | null {
+  let node: HTMLElement | null = el;
+  for (let depth = 0; depth < 32 && node; depth++) {
+    const cand =
+      asCodeMirror5Like((node as unknown as { CodeMirror?: unknown }).CodeMirror) ||
+      asCodeMirror5Like((node as unknown as { cm?: unknown }).cm);
+    if (cand) return cand;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Content scripts run in an isolated JS world: expandos like `div.CodeMirror` set by the page
+ * are usually invisible here, so `getValue()` via DOM traversal often fails. Reading rendered
+ * lines under `.CodeMirror-lines` matches what the user sees (same DOM).
+ */
+function isCmLineExtractHidden(el: Element, stop: Element): boolean {
+  let n: Element | null = el;
+  while (n && n !== stop) {
+    if (n instanceof HTMLElement) {
+      const s = getComputedStyle(n);
+      if (s.visibility === "hidden" || s.display === "none") return true;
+    }
+    n = n.parentElement;
+  }
+  return false;
+}
+
+function getCodeMirror5TextFromDom(cmRoot: Element): string | undefined {
+  const linesHost = cmRoot.querySelector(".CodeMirror-lines");
+  if (!linesHost) return undefined;
+
+  const lineEls = cmRoot.querySelectorAll(".CodeMirror-line");
+  if (lineEls.length > 0) {
+    const chunks: string[] = [];
+    for (const el of Array.from(lineEls)) {
+      if (isCmLineExtractHidden(el, cmRoot)) continue;
+      chunks.push(el.textContent ?? "");
+    }
+    if (chunks.length > 0) return chunks.join("\n");
+  }
+
+  const parts: string[] = [];
+  for (const pre of Array.from(linesHost.querySelectorAll("pre"))) {
+    if (!(pre instanceof HTMLElement)) continue;
+    if (pre.classList.contains("CodeMirror-cursor")) continue;
+    if (pre.classList.contains("activeline")) continue;
+    if (isCmLineExtractHidden(pre, cmRoot)) continue;
+    parts.push(pre.textContent ?? "");
+  }
+  return parts.join("\n");
+}
+
+/**
+ * No `scripting` permission: manifest registers `contentScriptMain.js` with `world: "MAIN"`, which
+ * listens for this CustomEvent and calls CodeMirror.setValue (page expandos visible there only).
+ */
+function codeMirror5SetValueViaMainWorld(cmRoot: Element, text: string): void {
+  const prevId = cmRoot.getAttribute("id");
+  const tmpId = `input-improve-cm-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+  cmRoot.setAttribute("id", tmpId);
+  try {
+    document.documentElement.dispatchEvent(
+      new CustomEvent(CM5_SET_VALUE_EVENT, {
+        bubbles: true,
+        composed: true,
+        detail: { cmRootId: tmpId, text },
+      }),
+    );
+  } finally {
+    if (prevId != null) cmRoot.setAttribute("id", prevId);
+    else cmRoot.removeAttribute("id");
+  }
+}
+
+/** Original textarea used with CodeMirror.fromTextArea (e.g. OSCHINA #markdown_source). */
+function findBackingTextareaOutsideCodeMirror(cmRoot: Element): HTMLTextAreaElement | null {
+  const prev = cmRoot.previousElementSibling;
+  if (prev instanceof HTMLTextAreaElement) return prev;
+  const parent = cmRoot.parentElement;
+  if (!parent) return null;
+  for (const n of Array.from(parent.querySelectorAll("textarea"))) {
+    if (!(n instanceof HTMLTextAreaElement)) continue;
+    if (cmRoot.contains(n)) continue;
+    return n;
+  }
+  return null;
+}
+
+type AceEditorLike = { getValue: () => string; setValue: (v: string, cursorPos?: number) => void };
+
+function findAceEditorFrom(el: HTMLElement): AceEditorLike | null {
+  const host = el.closest(".ace_editor");
+  if (!host || !(host instanceof HTMLElement)) return null;
+  const ace = (window as unknown as { ace?: { edit: (h: HTMLElement) => AceEditorLike } }).ace;
+  if (!ace?.edit) return null;
+  try {
+    return ace.edit(host);
+  } catch {
+    return null;
+  }
+}
+
 function getTextFromTarget(target: HTMLElement): string {
+  const cmRoot = target.closest?.(".CodeMirror");
+  if (cmRoot) {
+    const fromDom = getCodeMirror5TextFromDom(cmRoot);
+    if (fromDom !== undefined) return fromDom;
+    const ta = findBackingTextareaOutsideCodeMirror(cmRoot);
+    if (ta) return ta.value || "";
+  }
+
+  const cm5 = findCodeMirror5From(target);
+  if (cm5) return cm5.getValue() || "";
+
+  const aceEd = findAceEditorFrom(target);
+  if (aceEd) return aceEd.getValue() || "";
+
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return target.value || "";
   return (target.innerText || target.textContent || "").trimEnd();
 }
 
+function dispatchCompileHints(ta: HTMLTextAreaElement) {
+  ta.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  ta.dispatchEvent(new Event("keyup", { bubbles: true }));
+}
+
 function setTextToTarget(target: HTMLElement, text: string) {
+  const cmRoot = target.closest(".CodeMirror");
+  if (cmRoot) {
+    codeMirror5SetValueViaMainWorld(cmRoot, text);
+    const ta = findBackingTextareaOutsideCodeMirror(cmRoot);
+    if (ta) {
+      ta.value = text;
+      dispatchCompileHints(ta);
+    }
+    return;
+  }
+
+  const cm5 = findCodeMirror5From(target);
+  if (cm5) {
+    cm5.setValue(text);
+    if (typeof cm5.save === "function") cm5.save();
+    return;
+  }
+
+  const aceEd = findAceEditorFrom(target);
+  if (aceEd) {
+    aceEd.setValue(text, -1);
+    return;
+  }
+
   if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
     target.value = text;
     target.dispatchEvent(new InputEvent("input", { bubbles: true }));
