@@ -51,5 +51,5 @@ We may update this policy from time to time. Updates will be posted at this same
 
 If you have questions about this privacy policy, contact:
 
-- **Email:** REPLACE_WITH_SUPPORT_EMAIL
+- **Email:** tos@zhenggangzhao.org
 
